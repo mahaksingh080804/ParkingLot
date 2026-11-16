@@ -1,4 +1,12 @@
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Scanner;
+
+class ParkingException extends Exception {
+    ParkingException(String message) {
+        super(message);
+    }
+}
 
 class Vehicle {
     private String plate;
@@ -18,63 +26,64 @@ class Vehicle {
 
 public class ParkingLot {
     private static final int TOTAL_SLOTS = 10;
-    private static Vehicle[] slots = new Vehicle[TOTAL_SLOTS];   // null = free slot
+
+    private static HashMap<Integer, Vehicle> slots = new HashMap<>();
+
+    private static ArrayList<String> history = new ArrayList<>();
+
     private static double totalEarnings = 0;
     private static int vehiclesServed = 0;
     private static Scanner sc = new Scanner(System.in);
 
     public static void main(String[] args) {
         int choice = 0;
-        while (choice != 6) {
+        while (choice != 7) {
             System.out.println("\n===== Parking Lot =====");
             System.out.println("1. Park vehicle");
             System.out.println("2. Exit vehicle (pay)");
             System.out.println("3. Show slots");
             System.out.println("4. Find vehicle");
             System.out.println("5. Report");
-            System.out.println("6. Quit");
+            System.out.println("6. Parking history");
+            System.out.println("7. Quit");
             System.out.print("Choose: ");
-            choice = readInt();
 
-            if (choice == 1) parkVehicle();
-            else if (choice == 2) exitVehicle();
-            else if (choice == 3) showSlots();
-            else if (choice == 4) findVehicle();
-            else if (choice == 5) showReport();
-            else if (choice != 6) System.out.println("Invalid choice.");
+            try {
+                choice = readInt();
+
+                if (choice == 1) parkVehicle();
+                else if (choice == 2) exitVehicle();
+                else if (choice == 3) showSlots();
+                else if (choice == 4) findVehicle();
+                else if (choice == 5) showReport();
+                else if (choice == 6) showHistory();
+                else if (choice != 7) throw new ParkingException("Invalid choice.");
+            } catch (ParkingException e) {
+                System.out.println("Error: " + e.getMessage());
+            }
         }
         System.out.println("Goodbye!");
     }
 
-    static void parkVehicle() {
-        int free = -1;
-        for (int i = 0; i < TOTAL_SLOTS; i++) {
-            if (slots[i] == null) {
-                free = i;
-                break;
-            }
-        }
-        if (free == -1) {
-            System.out.println("Sorry, parking is full.");
-            return;
+    static void parkVehicle() throws ParkingException {
+        int freeSlot = findFreeSlot();
+        if (freeSlot == -1) {
+            throw new ParkingException("Sorry, parking is full.");
         }
 
         System.out.print("Vehicle type (1=Bike, 2=Car, 3=Truck): ");
         int type = readInt();
         if (type < 1 || type > 3) {
-            System.out.println("Invalid type.");
-            return;
+            throw new ParkingException("Invalid vehicle type.");
         }
 
         System.out.print("Plate number: ");
         String plate = sc.nextLine().trim().toUpperCase();
         if (plate.isEmpty()) {
-            System.out.println("Plate cannot be empty.");
-            return;
+            throw new ParkingException("Plate cannot be empty.");
         }
         if (findSlot(plate) != -1) {
-            System.out.println("This vehicle is already parked.");
-            return;
+            throw new ParkingException("This vehicle is already parked.");
         }
 
         Vehicle v;
@@ -82,73 +91,95 @@ public class ParkingLot {
         else if (type == 2) v = new Vehicle(plate, "Car", 40);
         else v = new Vehicle(plate, "Truck", 80);
 
-        slots[free] = v;
-        System.out.println(v.getType() + " " + plate + " parked at slot " + (free + 1)
+        slots.put(freeSlot, v);
+        System.out.println(v.getType() + " " + plate + " parked at slot " + freeSlot
                 + " (Rs." + v.getRatePerHour() + " per hour)");
     }
 
-    static void exitVehicle() {
+    static void exitVehicle() throws ParkingException {
         System.out.print("Plate number: ");
         String plate = sc.nextLine().trim().toUpperCase();
-        int index = findSlot(plate);
-        if (index == -1) {
-            System.out.println("Vehicle not found.");
-            return;
+        int slotNo = findSlot(plate);
+        if (slotNo == -1) {
+            throw new ParkingException("Vehicle not found.");
         }
 
         System.out.print("Hours parked: ");
         int hours = readInt();
         if (hours < 1) hours = 1;
 
-        double fee = hours * slots[index].getRatePerHour();
-        slots[index] = null;
+        Vehicle v = slots.get(slotNo);
+        double fee = hours * v.getRatePerHour();
+
+        slots.remove(slotNo);
         totalEarnings += fee;
         vehiclesServed++;
-        System.out.println("Slot " + (index + 1) + " is free now. Fee for " + hours + " hour(s): Rs." + fee);
+        history.add(v.getType() + " " + v.getPlate() + " | " + hours + " hour(s) | Rs." + fee);
+
+        System.out.println("Slot " + slotNo + " is free now. Fee for " + hours + " hour(s): Rs." + fee);
     }
 
     static void showSlots() {
-        for (int i = 0; i < TOTAL_SLOTS; i++) {
-            if (slots[i] == null) System.out.println("Slot " + (i + 1) + ": Free");
-            else System.out.println("Slot " + (i + 1) + ": " + slots[i].getType() + " - " + slots[i].getPlate());
+        for (int i = 1; i <= TOTAL_SLOTS; i++) {
+            Vehicle v = slots.get(i);
+            if (v == null) System.out.println("Slot " + i + ": Free");
+            else System.out.println("Slot " + i + ": " + v.getType() + " - " + v.getPlate());
         }
     }
 
-    static void findVehicle() {
+    static void findVehicle() throws ParkingException {
         System.out.print("Plate number: ");
-        int index = findSlot(sc.nextLine().trim().toUpperCase());
-        if (index == -1) System.out.println("Vehicle not found.");
-        else System.out.println("Parked at slot " + (index + 1));
+        int slotNo = findSlot(sc.nextLine().trim().toUpperCase());
+        if (slotNo == -1) {
+            throw new ParkingException("Vehicle not found.");
+        }
+        System.out.println("Parked at slot " + slotNo);
+    }
+
+    static void showHistory() {
+        if (history.isEmpty()) {
+            System.out.println("No completed parkings yet.");
+            return;
+        }
+        System.out.println("--- Parking History ---");
+        for (String record : history) {
+            System.out.println(record);
+        }
     }
 
     static void showReport() {
         int bikes = 0, cars = 0, trucks = 0;
-        for (Vehicle v : slots) {
-            if (v == null) continue;
+        for (Vehicle v : slots.values()) {
             if (v.getType().equals("Bike")) bikes++;
             else if (v.getType().equals("Car")) cars++;
             else trucks++;
         }
         System.out.println("--- Report ---");
-        System.out.println("Parked now      : " + (bikes + cars + trucks) + "/" + TOTAL_SLOTS);
+        System.out.println("Parked now      : " + slots.size() + "/" + TOTAL_SLOTS);
         System.out.println("  Bikes: " + bikes + ", Cars: " + cars + ", Trucks: " + trucks);
         System.out.println("Vehicles served : " + vehiclesServed);
         System.out.println("Total earnings  : Rs." + totalEarnings);
     }
 
-    // returns slot index of the plate, or -1 if not found
-    static int findSlot(String plate) {
-        for (int i = 0; i < TOTAL_SLOTS; i++) {
-            if (slots[i] != null && slots[i].getPlate().equals(plate)) return i;
+    static int findFreeSlot() {
+        for (int i = 1; i <= TOTAL_SLOTS; i++) {
+            if (!slots.containsKey(i)) return i;
         }
         return -1;
     }
 
-    static int readInt() {
+    static int findSlot(String plate) {
+        for (int slotNo : slots.keySet()) {
+            if (slots.get(slotNo).getPlate().equals(plate)) return slotNo;
+        }
+        return -1;
+    }
+
+    static int readInt() throws ParkingException {
         try {
             return Integer.parseInt(sc.nextLine().trim());
         } catch (NumberFormatException e) {
-            return -1;
+            throw new ParkingException("Please enter a valid number.");
         }
     }
 }
